@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Shell: Bash](https://img.shields.io/badge/Shell-Bash-green.svg)](https://www.gnu.org/software/bash/)
-[![Platform: macOS | Linux](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-blue.svg)](https://github.com/yourusername/claude-manager)
+[![Platform: macOS | Linux](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-blue.svg)](https://github.com/panda850819/claude-manager)
 
 ## 🎯 What is Claude Manager?
 
@@ -27,7 +27,7 @@ Claude Manager is a lightweight CLI tool designed to manage Claude Code agent pr
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/claude-manager.git
+git clone https://github.com/panda850819/claude-manager.git
 cd claude-manager
 
 # Run the installer
@@ -345,7 +345,7 @@ Contributions are welcome! Here's how you can help:
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/claude-manager.git
+git clone https://github.com/panda850819/claude-manager.git
 cd claude-manager
 
 # Make your changes to claude-manager script
@@ -368,8 +368,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 📮 Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/claude-manager/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/claude-manager/discussions)
+- **Issues**: [GitHub Issues](https://github.com/panda850819/claude-manager/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/panda850819/claude-manager/discussions)
 
 ---
 

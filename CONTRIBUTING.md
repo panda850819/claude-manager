@@ -52,7 +52,7 @@ Feature requests are welcome! Please:
 1. **Fork the repository**
 
    ```bash
-   git clone https://github.com/yourusername/claude-manager.git
+   git clone https://github.com/panda850819/claude-manager.git
    cd claude-manager
    ```
 

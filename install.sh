@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # claude-manager installer
-# https://github.com/yourusername/claude-manager
+# https://github.com/panda850819/claude-manager
 
 set -euo pipefail
 
@@ -160,5 +160,5 @@ echo -e "Try running: ${CYAN}claude-manager status${NC}"
 echo ""
 echo -e "For more information:"
 echo -e "  ${CYAN}claude-manager help${NC}"
-echo -e "  ${CYAN}https://github.com/yourusername/claude-manager${NC}"
+echo -e "  ${CYAN}https://github.com/panda850819/claude-manager${NC}"
 echo ""

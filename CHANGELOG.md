@@ -64,4 +64,4 @@ Ideas for future releases (not committed):
 
 ---
 
-[1.0.0]: https://github.com/yourusername/claude-manager/releases/tag/v1.0.0
+[1.0.0]: https://github.com/panda850819/claude-manager/releases/tag/v1.0.0

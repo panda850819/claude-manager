@@ -36,10 +36,10 @@ If any command is missing, install it using your package manager.
 
 ```bash
 # Download and run installer
-curl -fsSL https://raw.githubusercontent.com/yourusername/claude-manager/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/panda850819/claude-manager/main/install.sh | bash
 
 # Or with git
-git clone https://github.com/yourusername/claude-manager.git
+git clone https://github.com/panda850819/claude-manager.git
 cd claude-manager
 ./install.sh
 ```
@@ -48,7 +48,7 @@ cd claude-manager
 
 ```bash
 # Download the script
-curl -fsSL https://raw.githubusercontent.com/yourusername/claude-manager/main/claude-manager -o /usr/local/bin/claude-manager
+curl -fsSL https://raw.githubusercontent.com/panda850819/claude-manager/main/claude-manager -o /usr/local/bin/claude-manager
 
 # Make it executable
 chmod +x /usr/local/bin/claude-manager
@@ -66,7 +66,7 @@ If you don't have sudo access or prefer a local installation:
 mkdir -p ~/bin
 
 # Download the script
-curl -fsSL https://raw.githubusercontent.com/yourusername/claude-manager/main/claude-manager -o ~/bin/claude-manager
+curl -fsSL https://raw.githubusercontent.com/panda850819/claude-manager/main/claude-manager -o ~/bin/claude-manager
 
 # Make it executable
 chmod +x ~/bin/claude-manager
@@ -152,7 +152,7 @@ git pull
 
 ```bash
 # Re-download and replace
-curl -fsSL https://raw.githubusercontent.com/yourusername/claude-manager/main/claude-manager -o /usr/local/bin/claude-manager
+curl -fsSL https://raw.githubusercontent.com/panda850819/claude-manager/main/claude-manager -o /usr/local/bin/claude-manager
 chmod +x /usr/local/bin/claude-manager
 ```
 
@@ -238,7 +238,7 @@ If you're running Claude Code in a Docker container:
 ```dockerfile
 # Add to your Dockerfile
 RUN apt-get update && apt-get install -y bc procps curl
-RUN curl -fsSL https://raw.githubusercontent.com/yourusername/claude-manager/main/claude-manager -o /usr/local/bin/claude-manager \
+RUN curl -fsSL https://raw.githubusercontent.com/panda850819/claude-manager/main/claude-manager -o /usr/local/bin/claude-manager \
     && chmod +x /usr/local/bin/claude-manager
 ```
 
@@ -256,5 +256,5 @@ After installation:
 If you encounter issues:
 
 - Check the [FAQ](../README.md#-faq) in the main README
-- Search [existing issues](https://github.com/yourusername/claude-manager/issues)
+- Search [existing issues](https://github.com/panda850819/claude-manager/issues)
 - Open a new issue with details about your environment
