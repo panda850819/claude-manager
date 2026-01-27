@@ -1,0 +1,518 @@
+#!/usr/bin/env bash
+
+# claude-manager - Manage Claude Code agent processes
+# https://github.com/yourusername/claude-manager
+
+set -euo pipefail
+
+VERSION="1.0.0"
+
+# Color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+GRAY='\033[0;90m'
+NC='\033[0m' # No Color
+
+# Thresholds
+ACTIVE_CPU_THRESHOLD=3
+ACTIVE_MEM_THRESHOLD=200000  # 200MB in KB
+RUNNING_CPU_THRESHOLD=5
+IDLE_CPU_THRESHOLD=0.5
+IDLE_MEM_THRESHOLD=100000    # 100MB in KB
+
+usage() {
+    cat << EOF
+claude-manager v${VERSION} - Manage Claude Code agent processes
+
+Usage:
+    claude-manager <command> [options]
+
+Commands:
+    list                List all Claude Code processes
+    status              Show detailed status with resource usage
+    clean-idle          Clean only truly idle processes (safe)
+    clean-all           Clean all non-active processes
+    kill                Force kill all Claude processes (dangerous)
+    help                Show this help message
+    version             Show version
+
+Options:
+    -h, --help          Show this help message
+    -v, --version       Show version
+    -y, --yes           Skip confirmation prompts
+
+Examples:
+    claude-manager status
+    claude-manager clean-idle
+    claude-manager clean-all -y
+
+For more information, visit: https://github.com/yourusername/claude-manager
+EOF
+}
+
+version() {
+    echo "claude-manager v${VERSION}"
+}
+
+# Get current session PID
+get_current_pid() {
+    echo "$$"
+}
+
+# Get all Claude processes
+get_claude_processes() {
+    pgrep -f "claude" | grep -v "^$$\$" | grep -v "grep" || true
+}
+
+# Get process info
+get_process_info() {
+    local pid=$1
+
+    # Get CPU and memory usage
+    local ps_output
+    ps_output=$(ps -p "$pid" -o %cpu=,rss=,command= 2>/dev/null || echo "")
+
+    if [ -z "$ps_output" ]; then
+        return 1
+    fi
+
+    local cpu mem command
+    read -r cpu mem command <<< "$ps_output"
+
+    echo "$cpu|$mem|$command"
+}
+
+# Check if process is active
+is_active_process() {
+    local cpu=$1
+    local mem=$2
+
+    # CPU > 3% or Memory > 200MB
+    if (( $(echo "$cpu > $ACTIVE_CPU_THRESHOLD" | bc -l) )) || (( mem > ACTIVE_MEM_THRESHOLD )); then
+        return 0
+    fi
+    return 1
+}
+
+# Check if process is running
+is_running_process() {
+    local cpu=$1
+
+    # CPU > 5%
+    if (( $(echo "$cpu > $RUNNING_CPU_THRESHOLD" | bc -l) )); then
+        return 0
+    fi
+    return 1
+}
+
+# Check if process is idle
+is_idle_process() {
+    local cpu=$1
+    local mem=$2
+
+    # CPU < 0.5% and Memory < 100MB
+    if (( $(echo "$cpu < $IDLE_CPU_THRESHOLD" | bc -l) )) && (( mem < IDLE_MEM_THRESHOLD )); then
+        return 0
+    fi
+    return 1
+}
+
+# Get all active session PIDs
+get_active_pids() {
+    local -a active_pids=()
+    local current_pid
+    current_pid=$(get_current_pid)
+
+    while read -r pid; do
+        [ -z "$pid" ] && continue
+
+        local info
+        info=$(get_process_info "$pid")
+        [ -z "$info" ] && continue
+
+        IFS='|' read -r cpu mem command <<< "$info"
+
+        # Check if active
+        if is_active_process "$cpu" "$mem"; then
+            active_pids+=("$pid")
+        fi
+    done < <(get_claude_processes)
+
+    echo "${active_pids[@]}"
+}
+
+# List command
+cmd_list() {
+    local pids
+    pids=$(get_claude_processes)
+
+    if [ -z "$pids" ]; then
+        echo -e "${YELLOW}No Claude Code processes found.${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}Claude Code Processes:${NC}"
+    echo ""
+
+    local count=0
+    while read -r pid; do
+        [ -z "$pid" ] && continue
+        count=$((count + 1))
+        echo -e "  ${GREEN}PID:${NC} $pid"
+    done <<< "$pids"
+
+    echo ""
+    echo -e "Total: ${GREEN}${count}${NC} processes"
+}
+
+# Status command
+cmd_status() {
+    local pids
+    pids=$(get_claude_processes)
+
+    if [ -z "$pids" ]; then
+        echo -e "${YELLOW}No Claude Code processes found.${NC}"
+        return 0
+    fi
+
+    local current_pid
+    current_pid=$(get_current_pid)
+
+    local active_pids
+    read -ra active_pids <<< "$(get_active_pids)"
+
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}                  Claude Code Status Report${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo ""
+
+    # Process details
+    echo -e "${BLUE}Process Details:${NC}"
+    echo -e "${GRAY}┌────────┬──────────┬──────────┬──────────────────────────────────┐${NC}"
+    echo -e "${GRAY}│  PID   │   CPU%   │   MEM    │            STATUS                │${NC}"
+    echo -e "${GRAY}├────────┼──────────┼──────────┼──────────────────────────────────┤${NC}"
+
+    local total_count=0
+    local active_count=0
+    local running_count=0
+    local standby_count=0
+    local idle_count=0
+
+    while read -r pid; do
+        [ -z "$pid" ] && continue
+
+        local info
+        info=$(get_process_info "$pid")
+        [ -z "$info" ] && continue
+
+        IFS='|' read -r cpu mem command <<< "$info"
+
+        total_count=$((total_count + 1))
+
+        # Convert memory to MB
+        local mem_mb
+        mem_mb=$(echo "scale=0; $mem / 1024" | bc)
+
+        # Determine status
+        local status=""
+        local color=""
+
+        if [[ " ${active_pids[*]} " =~ " ${pid} " ]]; then
+            if [ "$pid" = "$current_pid" ]; then
+                status="當前 (Current)"
+                color="$GREEN"
+                active_count=$((active_count + 1))
+            else
+                status="活躍 (Active)"
+                color="$GREEN"
+                active_count=$((active_count + 1))
+            fi
+        elif is_running_process "$cpu"; then
+            status="運行中 (Running)"
+            color="$BLUE"
+            running_count=$((running_count + 1))
+        elif is_idle_process "$cpu" "$mem"; then
+            status="閒置 (Idle)"
+            color="$GRAY"
+            idle_count=$((idle_count + 1))
+        else
+            status="待機 (Standby)"
+            color="$YELLOW"
+            standby_count=$((standby_count + 1))
+        fi
+
+        printf "${GRAY}│${NC} ${color}%-6s${NC} ${GRAY}│${NC} %7.1f%% ${GRAY}│${NC} %7dM ${GRAY}│${NC} ${color}%-32s${NC} ${GRAY}│${NC}\n" \
+            "$pid" "$cpu" "$mem_mb" "$status"
+
+    done <<< "$pids"
+
+    echo -e "${GRAY}└────────┴──────────┴──────────┴──────────────────────────────────┘${NC}"
+    echo ""
+
+    # Summary
+    echo -e "${BLUE}Summary:${NC}"
+    echo -e "  Total Processes:  ${CYAN}${total_count}${NC}"
+    echo -e "  ${GREEN}Active:${NC}           ${active_count}"
+    echo -e "  ${BLUE}Running:${NC}          ${running_count}"
+    echo -e "  ${YELLOW}Standby:${NC}          ${standby_count}"
+    echo -e "  ${GRAY}Idle:${NC}             ${idle_count}"
+    echo ""
+
+    if [ "${#active_pids[@]}" -gt 1 ]; then
+        echo -e "${YELLOW}Active Sessions:${NC}  ${#active_pids[@]} (PID: ${active_pids[*]})"
+        echo -e "${YELLOW}Note:${NC} Multiple active Claude windows detected."
+        echo ""
+    fi
+
+    # Status Legend
+    echo -e "${BLUE}Status Legend:${NC}"
+    echo -e "  ${GREEN}當前 (Current)${NC}   - This conversation window"
+    echo -e "  ${GREEN}活躍 (Active)${NC}    - Other active windows (CPU >3% or Mem >200MB)"
+    echo -e "  ${BLUE}運行中 (Running)${NC} - Processing tasks (CPU >5%)"
+    echo -e "  ${YELLOW}待機 (Standby)${NC}   - Large memory footprint but low CPU"
+    echo -e "  ${GRAY}閒置 (Idle)${NC}      - Truly idle (CPU <0.5%, Mem <100MB)"
+    echo ""
+}
+
+# Clean idle processes
+cmd_clean_idle() {
+    local skip_confirm=false
+    if [ "${1:-}" = "-y" ] || [ "${1:-}" = "--yes" ]; then
+        skip_confirm=true
+    fi
+
+    local pids
+    pids=$(get_claude_processes)
+
+    if [ -z "$pids" ]; then
+        echo -e "${YELLOW}No Claude Code processes found.${NC}"
+        return 0
+    fi
+
+    local active_pids
+    read -ra active_pids <<< "$(get_active_pids)"
+
+    local -a idle_pids=()
+
+    while read -r pid; do
+        [ -z "$pid" ] && continue
+
+        # Skip if active
+        if [[ " ${active_pids[*]} " =~ " ${pid} " ]]; then
+            continue
+        fi
+
+        local info
+        info=$(get_process_info "$pid")
+        [ -z "$info" ] && continue
+
+        IFS='|' read -r cpu mem command <<< "$info"
+
+        if is_idle_process "$cpu" "$mem"; then
+            idle_pids+=("$pid")
+        fi
+    done <<< "$pids"
+
+    if [ "${#idle_pids[@]}" -eq 0 ]; then
+        echo -e "${GREEN}No idle processes to clean.${NC}"
+        return 0
+    fi
+
+    echo -e "${YELLOW}Found ${#idle_pids[@]} idle processes to clean.${NC}"
+
+    if [ "${#active_pids[@]}" -gt 0 ]; then
+        echo -e "${GREEN}Protecting ${#active_pids[@]} active sessions:${NC} ${active_pids[*]}"
+    fi
+
+    echo -e "${RED}Will clean:${NC} ${idle_pids[*]}"
+    echo ""
+
+    if [ "$skip_confirm" = false ]; then
+        read -rp "Proceed with cleanup? (y/N): " confirm
+        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}Cleanup cancelled.${NC}"
+            return 0
+        fi
+    fi
+
+    local success=0
+    local failed=0
+
+    for pid in "${idle_pids[@]}"; do
+        if kill "$pid" 2>/dev/null; then
+            success=$((success + 1))
+            echo -e "${GREEN}✓${NC} Cleaned PID: $pid"
+        else
+            failed=$((failed + 1))
+            echo -e "${RED}✗${NC} Failed to clean PID: $pid"
+        fi
+    done
+
+    echo ""
+    echo -e "${GREEN}Success:${NC} ${success}, ${RED}Failed:${NC} ${failed}"
+}
+
+# Clean all non-active processes
+cmd_clean_all() {
+    local skip_confirm=false
+    if [ "${1:-}" = "-y" ] || [ "${1:-}" = "--yes" ]; then
+        skip_confirm=true
+    fi
+
+    local pids
+    pids=$(get_claude_processes)
+
+    if [ -z "$pids" ]; then
+        echo -e "${YELLOW}No Claude Code processes found.${NC}"
+        return 0
+    fi
+
+    local active_pids
+    read -ra active_pids <<< "$(get_active_pids)"
+
+    local -a cleanup_pids=()
+
+    while read -r pid; do
+        [ -z "$pid" ] && continue
+
+        # Skip if active
+        if [[ " ${active_pids[*]} " =~ " ${pid} " ]]; then
+            continue
+        fi
+
+        cleanup_pids+=("$pid")
+    done <<< "$pids"
+
+    if [ "${#cleanup_pids[@]}" -eq 0 ]; then
+        echo -e "${GREEN}No processes to clean.${NC}"
+        if [ "${#active_pids[@]}" -gt 0 ]; then
+            echo -e "${GREEN}All processes are active.${NC}"
+        fi
+        return 0
+    fi
+
+    echo -e "${YELLOW}Found ${#cleanup_pids[@]} non-active processes to clean.${NC}"
+
+    if [ "${#active_pids[@]}" -gt 0 ]; then
+        echo -e "${GREEN}Protecting ${#active_pids[@]} active sessions:${NC} ${active_pids[*]}"
+    fi
+
+    echo -e "${RED}Will clean:${NC} ${cleanup_pids[*]}"
+    echo ""
+
+    if [ "$skip_confirm" = false ]; then
+        read -rp "Proceed with cleanup? (y/N): " confirm
+        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}Cleanup cancelled.${NC}"
+            return 0
+        fi
+    fi
+
+    local success=0
+    local failed=0
+
+    for pid in "${cleanup_pids[@]}"; do
+        if kill "$pid" 2>/dev/null; then
+            success=$((success + 1))
+            echo -e "${GREEN}✓${NC} Cleaned PID: $pid"
+        else
+            failed=$((failed + 1))
+            echo -e "${RED}✗${NC} Failed to clean PID: $pid"
+        fi
+    done
+
+    echo ""
+    echo -e "${GREEN}Success:${NC} ${success}, ${RED}Failed:${NC} ${failed}"
+}
+
+# Kill all processes
+cmd_kill() {
+    local skip_confirm=false
+    if [ "${1:-}" = "-y" ] || [ "${1:-}" = "--yes" ]; then
+        skip_confirm=true
+    fi
+
+    local pids
+    pids=$(get_claude_processes)
+
+    if [ -z "$pids" ]; then
+        echo -e "${YELLOW}No Claude Code processes found.${NC}"
+        return 0
+    fi
+
+    local count
+    count=$(echo "$pids" | wc -l | tr -d ' ')
+
+    echo -e "${RED}WARNING: This will kill ALL Claude Code processes!${NC}"
+    echo -e "${YELLOW}Found ${count} processes.${NC}"
+    echo ""
+
+    if [ "$skip_confirm" = false ]; then
+        read -rp "Are you sure? This action cannot be undone! (y/N): " confirm
+        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}Kill cancelled.${NC}"
+            return 0
+        fi
+    fi
+
+    local success=0
+    local failed=0
+
+    while read -r pid; do
+        [ -z "$pid" ] && continue
+
+        if kill -9 "$pid" 2>/dev/null; then
+            success=$((success + 1))
+            echo -e "${GREEN}✓${NC} Killed PID: $pid"
+        else
+            failed=$((failed + 1))
+            echo -e "${RED}✗${NC} Failed to kill PID: $pid"
+        fi
+    done <<< "$pids"
+
+    echo ""
+    echo -e "${GREEN}Success:${NC} ${success}, ${RED}Failed:${NC} ${failed}"
+}
+
+# Main
+main() {
+    if [ $# -eq 0 ]; then
+        usage
+        exit 1
+    fi
+
+    case "$1" in
+        list)
+            cmd_list
+            ;;
+        status)
+            cmd_status
+            ;;
+        clean-idle)
+            cmd_clean_idle "${2:-}"
+            ;;
+        clean-all)
+            cmd_clean_all "${2:-}"
+            ;;
+        kill)
+            cmd_kill "${2:-}"
+            ;;
+        help|-h|--help)
+            usage
+            ;;
+        version|-v|--version)
+            version
+            ;;
+        *)
+            echo -e "${RED}Error: Unknown command '$1'${NC}"
+            echo ""
+            usage
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
