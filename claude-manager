@@ -62,9 +62,28 @@ get_current_pid() {
     echo "$$"
 }
 
-# Get all Claude processes
+# Get all Claude Code main processes (excludes MCP servers, plugins, and this tool)
 get_claude_processes() {
-    pgrep -f "claude" | grep -v "^$$\$" | grep -v "grep" || true
+    local self_pid=$$
+    local pids
+    pids=$(pgrep -f "claude" 2>/dev/null) || true
+
+    [ -z "$pids" ] && return 0
+
+    echo "$pids" | while read -r pid; do
+        [ -z "$pid" ] && continue
+        [ "$pid" = "$self_pid" ] && continue
+
+        local cmd
+        cmd=$(ps -p "$pid" -o command= 2>/dev/null) || continue
+
+        # Skip MCP servers, plugins, and claude-manager itself
+        case "$cmd" in
+            *mcp*|*claude-manager*|*grep*) continue ;;
+        esac
+
+        echo "$pid"
+    done
 }
 
 # Get process info

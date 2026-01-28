@@ -1,3 +1,9 @@
+# Claude Manager
+
+## 語言
+
+- 請使用繁體中文回應
+
 <claude-mem-context>
 # Recent Activity
 
